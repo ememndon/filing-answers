@@ -249,19 +249,62 @@ one failure this project is least willing to have.
 Process lifetime is a natural and correct expiry. Restart the service and
 it re-reads the document.
 
-## Why the demo has no login
+## Why a password but not a login
 
-It is meant to be handed to strangers, so identity is not the control
-that matters. Spend is.
+The hosted demo asks for a password. It does not ask who you are, and
+the difference is the point.
 
-The limits are a per-visitor hourly allowance and a hard daily ceiling,
-and the second is the one that counts: a per-caller limit is defeated by
-using more callers, and only a global ceiling can promise that
-tomorrow's invoice is bounded. A refused question never reaches the
+There are no accounts here, nothing personal is stored, and no two
+visitors are treated differently — so a username would be a field to
+fill in that decides nothing, plus a user table, plus password resets,
+plus somewhere for personal data to end up. The only question worth
+asking of this site is *may you in*, and one shared secret answers it.
+
+It is off unless `SITE_PASSWORD` is set, so a fresh clone runs without
+one. A public repository that greets you with a locked door and no key
+is a repository nobody evaluates.
+
+Four things it has to get right, none of them clever, all of them
+skipped often enough to be worth listing:
+
+- **Constant-time comparison.** `==` on strings returns as soon as two
+  characters differ, and that difference is measurable across a network.
+  Given enough attempts it hands the password over one character at a
+  time.
+- **A signed cookie.** Otherwise the cookie *is* the password and anyone
+  can type `entered=yes` into a browser console. The signature covers
+  the expiry too, so a visitor cannot extend their own stay by editing
+  it — which is why the signature is checked before the expiry, rather
+  than trusting a number the visitor chose.
+- **A limit on guessing.** A password strong against a person is weak
+  against a loop. Eight attempts per quarter of an hour turns "hard to
+  guess" into "not worth trying". A correct password clears the count,
+  because someone who mistyped twice and then remembered is not an
+  attacker.
+- **The API behind it too.** A gate on the page with an open `/ask`
+  endpoint is decoration. The expensive part is behind the endpoint.
+
+It is a middleware rather than a dependency on each route, because a
+dependency only protects the handlers somebody remembered to decorate. A
+route added next month is covered without anyone thinking about it,
+which is the only kind of access control that survives a codebase
+growing. `/health` and `/ready` answer regardless — an orchestrator has
+no browser and no password, and a container that cannot report its own
+health gets restarted forever.
+
+**Spend is still the control that matters more.** A password decides who
+gets in; it does not stop the people who are in from being expensive. So
+the limits stay: a per-visitor hourly allowance and a hard daily ceiling,
+the second being the one that counts, since a per-caller limit is
+defeated by using more callers and only a global ceiling can promise
+that tomorrow's invoice is bounded. A refused question never reaches the
 model, so it costs nothing.
 
-They live in the application rather than in the reverse proxy, so they
-travel with the service wherever it is deployed.
+Both the gate and the limits live in the application rather than in the
+reverse proxy. The proxy here also serves three unrelated sites, and a
+control that lives in somebody else's configuration file is a control
+that does not travel with the container and gets lost the first time it
+is deployed anywhere else.
 
 ---
 

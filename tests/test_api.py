@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 from filing_answers.api import app, current_service
 from filing_answers.edgar import Filing, UnknownTickerError
+from filing_answers.gate import COOKIE, Attempts
 from filing_answers.limits import Limiter
 from filing_answers.pipeline import WITHHELD, Result, Trace
 
@@ -64,14 +65,18 @@ def client_for(service: Any) -> TestClient:
     # The state is what /health and /ready read, and they do not go
     # through the dependency.
     app.state.service = service
-    return TestClient(app)
+    # Over HTTPS, because the session cookie is set Secure and a client
+    # on plain HTTP will correctly refuse to store it. Discovered by a
+    # test that logged in successfully and was then locked out — which is
+    # the flag working, and is also how the deployment actually runs.
+    return TestClient(app, base_url="https://testserver")
 
 
 @pytest.fixture(autouse=True)
 def clean_up():
     yield
     app.dependency_overrides.clear()
-    for held in ("service", "limiter"):
+    for held in ("service", "limiter", "password", "attempts"):
         if hasattr(app.state, held):
             delattr(app.state, held)
 
@@ -237,3 +242,90 @@ class TestTheSpendingLimit:
         client.post("/ask", json=self.payload())
         client.post("/ask", json=self.payload())
         assert len(service.asked) == 1
+
+
+class TestThePasswordGate:
+    """Ways in that are not meant to work."""
+
+    def gated(self, password: str = "let-me-in-please"):
+        service = FakeService(GOOD)
+        client = client_for(service)
+        app.state.password = password
+        app.state.attempts = Attempts()
+        return client, service, password
+
+    def test_the_page_is_not_served_without_it(self) -> None:
+        client, _, _ = self.gated()
+        response = client.get("/")
+        assert response.status_code == 401
+        assert 'name="password"' in response.text
+
+    def test_the_api_is_not_either(self) -> None:
+        # a gate on the page and an open endpoint is decoration — the
+        # expensive part is behind the endpoint
+        client, service, _ = self.gated()
+        response = client.post("/ask", json={"ticker": "AAPL", "question": "What were sales?"})
+        assert response.status_code == 401
+        assert service.asked == []
+
+    def test_the_docs_are_not_either(self) -> None:
+        client, _, _ = self.gated()
+        assert client.get("/docs").status_code == 401
+
+    def test_health_and_ready_answer_regardless(self) -> None:
+        # an orchestrator has no browser and no password, and a container
+        # that cannot report its own health gets restarted forever
+        client, _, _ = self.gated()
+        assert client.get("/health").status_code == 200
+        assert client.get("/ready").status_code == 200
+
+    def test_the_right_password_lets_you_in(self) -> None:
+        client, _, password = self.gated()
+        entered = client.post("/enter", data={"password": password}, follow_redirects=False)
+        assert entered.status_code == 303
+        assert client.get("/").status_code == 200
+
+    def test_the_wrong_one_does_not(self) -> None:
+        client, _, _ = self.gated()
+        refused = client.post("/enter", data={"password": "guess"}, follow_redirects=False)
+        assert refused.status_code == 401
+        assert client.get("/").status_code == 401
+
+    def test_the_cookie_cannot_simply_be_set(self) -> None:
+        # the reason it is signed
+        client, _, _ = self.gated()
+        client.cookies.set(COOKIE, "yes")
+        assert client.get("/").status_code == 401
+
+    def test_the_cookie_is_httponly_and_secure(self) -> None:
+        client, _, password = self.gated()
+        entered = client.post("/enter", data={"password": password}, follow_redirects=False)
+        cookie = entered.headers["set-cookie"].lower()
+        assert "httponly" in cookie
+        assert "secure" in cookie
+        assert "samesite=lax" in cookie
+
+    def test_guessing_is_stopped_before_it_gets_far(self) -> None:
+        client, _, _ = self.gated()
+        for _ in range(8):
+            client.post("/enter", data={"password": "wrong"}, follow_redirects=False)
+        blocked = client.post("/enter", data={"password": "wrong"}, follow_redirects=False)
+        assert blocked.status_code == 429
+
+    def test_the_lockout_holds_even_for_the_right_password(self) -> None:
+        # otherwise the limit is a speed bump a script drives over
+        client, _, password = self.gated()
+        for _ in range(8):
+            client.post("/enter", data={"password": "wrong"}, follow_redirects=False)
+        assert client.post("/enter", data={"password": password}).status_code == 429
+
+    def test_no_gate_at_all_when_no_password_is_configured(self) -> None:
+        # a fresh clone gets a working service, not a locked door
+        service = FakeService(GOOD)
+        client = client_for(service)
+        app.state.password = ""
+        assert client.get("/").status_code == 200
+        assert (
+            client.post("/ask", json={"ticker": "AAPL", "question": "What were sales?"}).status_code
+            == 200
+        )

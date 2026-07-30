@@ -21,6 +21,9 @@ dependencies = [
   "duckdb>=1.1",
   "structlog>=24.4",
   "lxml>=5.3",
+  # Form posts from the password page; FastAPI refuses to parse them
+  # without it, and refuses at import time rather than at request time.
+  "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

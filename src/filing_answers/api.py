@@ -32,12 +32,22 @@ from typing import Annotated
 import structlog
 from anthropic import APIError
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
 from .answer import anthropic_caller
 from .config import Settings, settings
 from .edgar import EdgarClient, FilingNotFoundError, UnknownTickerError
+from .gate import (
+    COOKIE,
+    OPEN_PATHS,
+    SESSION_HOURS,
+    Attempts,
+    admitted,
+    correct,
+    issue,
+    login_page,
+)
 from .limits import Limiter, RefusedError
 from .pipeline import AnswerService, Excerpt, Result
 
@@ -84,12 +94,15 @@ async def lifespan(app: FastAPI):
     # healthy, and returns a stack trace to the first person who uses it.
     config = settings()
     app.state.service = build_service(config)
+    app.state.password = config.site_password
+    app.state.attempts = Attempts()
     app.state.limiter = Limiter(
         per_caller=config.questions_per_visitor,
         per_day=config.questions_per_day,
     )
     log.info(
         "started",
+        gated=bool(config.site_password),
         model=config.answer_model,
         threshold=config.threshold,
         per_visitor=config.questions_per_visitor,
@@ -105,6 +118,77 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def gate(request: Request, call_next):
+    """Nothing is served until the visitor has given the password.
+
+    A middleware and not a dependency on each route, because a dependency
+    protects the handlers somebody remembered to decorate. A route added
+    next month is covered by this without anybody thinking about it,
+    which is the only kind of access control that survives a codebase
+    growing.
+
+    `/health` and `/ready` answer regardless. Orchestrators have no
+    browser and no password, and a container that cannot report its own
+    health gets restarted forever.
+    """
+    password = getattr(request.app.state, "password", "")
+    if not password or request.url.path in OPEN_PATHS:
+        return await call_next(request)
+
+    if admitted(password, request.cookies.get(COOKIE)):
+        return await call_next(request)
+
+    # An unattended caller — the UI's own fetch, curl, anything expecting
+    # data — gets a status code it can act on. A person gets the page.
+    if request.url.path == "/ask" or "application/json" in request.headers.get("accept", ""):
+        return Response(
+            status_code=401, content='{"detail":"password required"}', media_type="application/json"
+        )
+    return HTMLResponse(login_page(), status_code=401)
+
+
+@app.post("/enter", include_in_schema=False)
+async def enter(request: Request) -> Response:
+    """Check the password and, if it is right, let this browser in."""
+    password = getattr(request.app.state, "password", "")
+    if not password:
+        return RedirectResponse("/", status_code=303)
+
+    caller = request.client.host if request.client else "unknown"
+    attempts: Attempts = request.app.state.attempts
+
+    if attempts.too_many(caller):
+        # Told plainly rather than silently ignored. Somebody who has
+        # forgotten the password should know why their correct guess is
+        # about to fail too.
+        return HTMLResponse(
+            login_page("Too many attempts. Try again in fifteen minutes."), status_code=429
+        )
+
+    form = await request.form()
+    offered = str(form.get("password", ""))
+
+    if not correct(password, offered):
+        attempts.record_failure(caller)
+        log.warning("wrong password", caller=caller)
+        # No hint about how wrong it was. "Password incorrect" is the
+        # whole of what a visitor is entitled to know.
+        return HTMLResponse(login_page("That is not the password."), status_code=401)
+
+    attempts.forgive(caller)
+    response = RedirectResponse("/", status_code=303)
+    response.set_cookie(
+        COOKIE,
+        issue(password),
+        max_age=SESSION_HOURS * 3600,
+        httponly=True,  # unreadable to any script on the page
+        secure=True,  # never sent over plain HTTP
+        samesite="lax",  # not attached to requests another site makes
+    )
+    return response
 
 
 def current_service(request: Request) -> AnswerService:

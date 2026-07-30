@@ -6,7 +6,7 @@ things up**.
 
 The interesting part is not the answering. It is everything around it.
 
-**Try it:** [filings.ememndon.com](https://filings.ememndon.com) ·
+**Try it:** [filings.ememndon.com](https://filings.ememndon.com) (password-protected) ·
 **What blocks a prototype:** [PRODUCTION.md](PRODUCTION.md) ·
 **Why each decision:** [ARCHITECTURE.md](ARCHITECTURE.md)
 

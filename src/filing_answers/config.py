@@ -49,6 +49,15 @@ class Settings(BaseSettings):
 
     request_timeout_seconds: float = Field(default=30.0, gt=0)
 
+    site_password: str = Field(
+        default="",
+        description=(
+            "A password required before any page or the /ask endpoint answers. "
+            "Empty means no gate, so a fresh clone runs without one — the "
+            "deployment decides whether this demo is public, not the code."
+        ),
+    )
+
     questions_per_visitor: int = Field(
         default=20,
         ge=1,
