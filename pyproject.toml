@@ -20,6 +20,7 @@ dependencies = [
   "anthropic>=0.40",
   "duckdb>=1.1",
   "structlog>=24.4",
+  "lxml>=5.3",
 ]
 
 [project.optional-dependencies]
