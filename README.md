@@ -63,8 +63,8 @@ $ make evaluate
 
 Now make the system worse in an entirely reasonable way. Show the model two
 passages instead of eight: every prompt gets shorter, every request gets
-cheaper, and nothing breaks. It passes the linter, the type checker and all
-177 unit tests, because none of that is a bug.
+cheaper, and nothing breaks. `make check` is green — the linter is happy and
+every unit test passes — because none of it is a bug.
 
 ```
 $ make degraded
@@ -90,44 +90,72 @@ model that is wrong and ships is an incident.
 ```bash
 git clone https://github.com/ememndon/filing-answers.git
 cd filing-answers
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+make install
+source .venv/bin/activate
 
-cp .env.example .env      # then fill in the values
-pytest
+cp .env.example .env      # then fill in the two values
+make check                # linter and tests, no key needed
+make evaluate             # the gate, which does need one
 ```
 
-Everything runs locally. Filings are fetched from the SEC's public EDGAR
-service, which is free and needs no account — only a contact address in
-the request, which the SEC requires.
+Or in a container:
+
+```bash
+make docker
+docker run -p 8000:8000 -e ANTHROPIC_API_KEY=... -e SEC_USER_AGENT="you you@example.org" filing-answers
+```
+
+Filings come from the SEC's EDGAR service, which is free and needs no
+account — only a contact address on the request, which they require and
+this enforces rather than hopes for.
 
 ## How it is built
 
 | Piece | Choice |
 |---|---|
 | Language | Python 3.12 |
-| Service | FastAPI |
-| Pipeline | Airflow |
-| Storage | Postgres for state, DuckDB for the evaluation history |
-| Packaging | Docker |
+| Service | FastAPI, with liveness and readiness separated |
+| Retrieval | BM25 over passages cut from the filing itself |
+| Verification | plain Python, no model in the loop |
+| Question set | 48 hand-written questions, as JSON beside the code |
+| History | DuckDB, one row per evaluation run |
+| Logs | structlog, structured |
+| Packaging | Docker, non-root, two-stage |
 | Automation | GitHub Actions |
-| Telemetry | OpenTelemetry traces, structured logs |
 | Model | a small hosted one — deliberately |
 
-The model is the least important choice here. Swapping it is a line of
-config, and the gate is what decides whether the swap is allowed to ship.
+The model is the least important choice on that list. Swapping it is one
+line of config; the gate is what decides whether the swap may ship.
+
+Retrieval is keyword scoring rather than embeddings, on purpose. This is a
+few hundred passages of one document, where BM25 is strong, instant, free,
+and — when it puts the wrong paragraph first — can be read line by line
+until you find out why. Two of the fixes in this repo's history came from
+being able to do exactly that.
 
 ## What this is not
 
-It is a small, complete example rather than a large, unfinished one.
+A small, complete example rather than a large, unfinished one. What is
+missing is missing on purpose, and it is worth being specific about it.
 
-- **Not a product.** One document type, one question shape, no user accounts.
-- **Not a benchmark.** The evaluation set is 48 hand-written questions, not
-  a research dataset.
-- **Not deployed.** It is built to deploy — twelve-factor config, a proper
-  container, health and readiness endpoints — and runs under Docker rather
-  than on a cloud account, because a live URL nobody is paying to maintain
-  is a broken link waiting to happen.
+- **No orchestrator.** There is no pipeline to schedule. One question is
+  one request, and the only recurring job is the weekly evaluation, which
+  is four lines of cron in the CI workflow. Airflow to run that would be
+  a second system to keep alive in order to avoid a `schedule:` block.
+- **No database.** Nothing here has state worth keeping between requests
+  except parsed filings, which are a cache and belong in memory. Evaluation
+  history is a DuckDB file because it is a file: no server, no migrations,
+  and anyone can open it.
+- **No tracing.** There is one span worth having and its timing is already
+  in the log line. OpenTelemetry earns its keep across service boundaries,
+  and this has one service.
+- **Not a benchmark.** 48 questions over three filings, hand-checked. It is
+  a release gate, not a research dataset, and it is honest about what it
+  cannot answer: one question in the set has never passed, and it stays in.
+- **Not deployed.** It is built to deploy — twelve-factor config, health and
+  readiness, a non-root container — and it runs locally rather than on a
+  cloud account, because a live URL nobody is paying to maintain is a broken
+  link waiting to happen.
 
 ## Licence
 

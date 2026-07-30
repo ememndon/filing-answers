@@ -1,0 +1,96 @@
+# Two jobs, because they answer different questions and cost different
+# amounts.
+#
+# `checks` asks whether the code is correct, runs on every push, needs no
+# key and no network, and takes under a minute.
+#
+# `gate` asks whether the answers are still good enough to ship. It costs
+# money and calls two external services, so it runs on the default branch
+# and on a schedule rather than on every commit to every branch. A
+# question set is only useful if it is actually run, and only affordable
+# if it is not run on every keystroke.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Monday morning. A regression that arrives by way of a model
+    # changing underneath the service will not announce itself in a
+    # commit, so something has to look without being asked.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: lint and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Test
+        run: pytest
+
+  gate:
+    name: release gate
+    runs-on: ubuntu-latest
+    needs: checks
+    # Only where the key exists. A fork's pull request has no access to
+    # secrets, and a job that fails for that reason teaches contributors
+    # to ignore a red tick.
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Cache filings
+        # The SEC asks that you not re-download what you already have,
+        # and honouring that between runs is both polite and faster.
+        uses: actions/cache@v4
+        with:
+          path: data/filings
+          key: filings-${{ hashFiles('evaluation/questions.json') }}
+          restore-keys: filings-
+
+      - name: Evaluate
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        # No `continue-on-error`. The exit code is the entire point: a
+        # gate that reports a failure and lets the workflow go green is a
+        # notification, and nobody reads notifications.
+        run: python -m filing_answers evaluate
+
+      - name: Keep the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-history
+          path: data/evaluations.duckdb
+          if-no-files-found: ignore

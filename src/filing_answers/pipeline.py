@@ -129,6 +129,14 @@ class AnswerService:
         self._passages = passages_per_question
         self._indexes: dict[str, FilingIndex] = {}
 
+    @property
+    def filings_held(self) -> int:
+        """How many annual reports are parsed and in memory."""
+        return len(self._indexes)
+
+    def close(self) -> None:
+        self._edgar.close()
+
     def index_for(self, ticker: str) -> FilingIndex:
         """The searchable form of a company's latest annual report."""
         key = ticker.strip().upper()

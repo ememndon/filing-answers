@@ -28,6 +28,7 @@ before it, not better.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -35,9 +36,30 @@ from pydantic import BaseModel, Field
 from .pipeline import AnswerService, Result
 from .verify import figure_value, figures_in
 
-#: Where the questions live. Data, not code, so the set can be read and
-#: argued with by someone who does not want to read Python.
-QUESTIONS = Path(__file__).resolve().parents[2] / "evaluation" / "questions.json"
+
+#: Where to look for the questions. Data, not code, so the set can be
+#: read and argued with by someone who does not want to read Python —
+#: which means it lives beside the source rather than inside it, and has
+#: to be found rather than imported.
+#:
+#: In a checkout that is two directories up from this file. Installed
+#: into a container it is not: the package sits in site-packages and the
+#: question set sits next to the working directory, so both are tried.
+#: The environment variable is for anyone running the gate against a
+#: question set of their own, which is the whole point of keeping the
+#: expected answers out of the code.
+def questions_path() -> Path:
+    override = os.environ.get("FILING_ANSWERS_QUESTIONS")
+    candidates = [
+        Path(override) if override else None,
+        Path(__file__).resolve().parents[2] / "evaluation" / "questions.json",
+        Path.cwd() / "evaluation" / "questions.json",
+    ]
+    for candidate in candidates:
+        if candidate and candidate.is_file():
+            return candidate
+    looked = ", ".join(str(c) for c in candidates if c)
+    raise FileNotFoundError(f"no question set found. Looked in: {looked}")
 
 
 class Question(BaseModel):
@@ -115,9 +137,9 @@ class Report(BaseModel):
         return self.accuracy >= self.threshold and self.unsupported == 0
 
 
-def load(path: Path = QUESTIONS) -> list[Question]:
+def load(path: Path | None = None) -> list[Question]:
     """The question set, from disk."""
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw = json.loads((path or questions_path()).read_text(encoding="utf-8"))
     return [Question(**q) for q in raw["questions"]]
 
 

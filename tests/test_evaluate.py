@@ -14,12 +14,12 @@ from __future__ import annotations
 import json
 
 from filing_answers.evaluate import (
-    QUESTIONS,
     Outcome,
     Question,
     Report,
     grade,
     load,
+    questions_path,
     render,
     states_figure,
 )
@@ -219,6 +219,6 @@ class TestTheQuestionSetItself:
     def test_asks_for_prior_years_as_well_as_the_current_one(self) -> None:
         # picking the wrong column of a three-year row is the commonest
         # way to be confidently wrong about a filing
-        raw = json.loads(QUESTIONS.read_text(encoding="utf-8"))
+        raw = json.loads(questions_path().read_text(encoding="utf-8"))
         prior = [q for q in raw["questions"] if "column" in q.get("source", "")]
         assert len(prior) >= 6

@@ -1,0 +1,20 @@
+# Anything holding a secret, and anything that would make the image
+# bigger without making it work.
+.env
+.env.*
+!.env.example
+
+.venv/
+data/
+.git/
+.github/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.duckdb
+
+tests/
+Makefile
+Dockerfile
+.dockerignore
