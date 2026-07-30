@@ -32,9 +32,9 @@ jobs:
     name: lint and tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -59,9 +59,9 @@ jobs:
     # to ignore a red tick.
     if: github.event_name != 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -72,7 +72,7 @@ jobs:
       - name: Cache filings
         # The SEC asks that you not re-download what you already have,
         # and honouring that between runs is both polite and faster.
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: data/filings
           key: filings-${{ hashFiles('evaluation/questions.json') }}
@@ -82,14 +82,41 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
-        # No `continue-on-error`. The exit code is the entire point: a
-        # gate that reports a failure and lets the workflow go green is a
-        # notification, and nobody reads notifications.
-        run: python -m filing_answers evaluate
+        # No `continue-on-error`. When the gate runs and fails, this
+        # workflow fails with it: the exit code is the entire point, and
+        # a gate that reports a failure while letting the tick go green
+        # is a notification that nobody reads.
+        #
+        # But it must fail for the right reason. Without a key the gate
+        # cannot run at all, and the first version of this turned that
+        # into a red tick identical to the one meaning "the answers got
+        # worse". They want opposite responses — add a secret, or stop
+        # the release — and a signal that cannot tell them apart trains
+        # everyone to ignore it.
+        #
+        # So a missing key stops the job and says so, loudly, and does
+        # not claim the gate passed. Not being able to measure something
+        # is not the same as measuring it and finding it fine.
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            {
+              echo "### Release gate did not run"
+              echo
+              echo 'No `ANTHROPIC_API_KEY` is configured for this repository, so the'
+              echo '48-question evaluation was never put to the model.'
+              echo
+              echo '**Nothing was measured.** This is not a passing gate — it is an'
+              echo 'absent one. Add the secret under Settings → Secrets and variables'
+              echo '→ Actions to turn it on.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=Release gate skipped::No ANTHROPIC_API_KEY configured — nothing was measured."
+            exit 0
+          fi
+          python -m filing_answers evaluate
 
       - name: Keep the run
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: evaluation-history
           path: data/evaluations.duckdb

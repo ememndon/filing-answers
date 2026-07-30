@@ -9,6 +9,20 @@ and returns zero is a report, and continuous integration does not read
 reports — it reads exit codes, and a release nobody is prepared to block
 is not gated by anything.
 
+Which means the codes have to say different things:
+
+    0  the answers were good enough to ship
+    1  they were not — block the release
+    2  the model named does not exist
+    3  it could not run at all, so nothing was measured
+
+Three is there because of a mistake this made. Run in CI without its API
+key configured, the gate crashed on startup and exited 1 — the same code
+it uses for "quality has dropped". A red tick that means "somebody forgot
+a secret" is indistinguishable from one that means "the model got worse",
+and the two want opposite responses. Not being able to measure something
+is not the same as measuring it and finding it wanting.
+
 The second is the demonstration, and it is deliberately an ordinary
 change rather than an exotic one. Showing the model two passages instead
 of eight makes every prompt shorter and every request cheaper, which is a
@@ -27,6 +41,7 @@ import argparse
 import sys
 
 from anthropic import NotFoundError
+from pydantic import ValidationError
 
 from .answer import anthropic_caller
 from .config import settings
@@ -114,7 +129,20 @@ def main(argv: list[str] | None = None) -> int:
     one.set_defaults(handler=ask)
 
     arguments = parser.parse_args(argv)
-    return int(arguments.handler(arguments))
+    try:
+        return int(arguments.handler(arguments))
+    except ValidationError as misconfigured:
+        # Everything this needs is checked on the way up, so a bad
+        # configuration arrives here as one error rather than halfway
+        # through a run. Reported as itself, and with its own exit code,
+        # so nothing downstream mistakes it for a failing evaluation.
+        print("\n  cannot run — the configuration is incomplete:\n")
+        for problem in misconfigured.errors():
+            field = ".".join(str(part) for part in problem["loc"]).upper()
+            message = problem["msg"].removeprefix("Value error, ")
+            print(f"    {field}: {message}")
+        print("\n  Nothing was measured. This is not a failing evaluation.\n")
+        return 3
 
 
 if __name__ == "__main__":
