@@ -136,7 +136,7 @@ class Attempts:
 LOGIN_PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>filing-answers</title>
+<title>Filing Answers</title>
 <style>
   :root {{
     --ink:#16181d; --muted:#5c636e; --line:#e3e6ea;
@@ -164,7 +164,7 @@ LOGIN_PAGE = """<!doctype html>
 </style></head>
 <body>
   <div class="box">
-    <h1>filing-answers</h1>
+    <h1>Filing Answers</h1>
     <p>Answers questions about company annual reports, and withholds any
        answer it cannot support with a quotation from the filing.</p>
     <form method="post" action="/enter">
