@@ -7,7 +7,8 @@ things up**.
 The interesting part is not the answering. It is everything around it.
 
 **Try it:** [filings.ememndon.com](https://filings.ememndon.com) ·
-**Why it is built this way:** [PRODUCTION.md](PRODUCTION.md)
+**What blocks a prototype:** [PRODUCTION.md](PRODUCTION.md) ·
+**Why each decision:** [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ---
 
@@ -145,8 +146,12 @@ line of config; the gate is what decides whether the swap may ship.
 Retrieval is keyword scoring rather than embeddings, on purpose. This is a
 few hundred passages of one document, where BM25 is strong, instant, free,
 and — when it puts the wrong paragraph first — can be read line by line
-until you find out why. Two of the fixes in this repo's history came from
-being able to do exactly that.
+until you find out why. Every retrieval bug in this repository was found
+that way, and each was invisible until somebody looked at the ranking.
+
+[ARCHITECTURE.md](ARCHITECTURE.md) has the reasoning behind that and every
+other decision here, including what each one cost and the condition under
+which it becomes the wrong one.
 
 ## What this is not
 
