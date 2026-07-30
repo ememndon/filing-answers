@@ -229,6 +229,37 @@ anyone is affected. `make degraded` shows a change that passes the
 linter and all 207 tests, costs sixteen right answers, and is stopped by
 an exit code. Monitoring would have told us afterwards.
 
+## Why the model runs at temperature zero
+
+Because for a while it did not, and that quietly made the release gate
+worthless.
+
+Run twice against identical code, the evaluation scored 95.8% and then
+91.7%, passing the first time and failing the second. Nothing had
+changed. The model was simply sampling from the answers it considered
+plausible, and on the second run one of those answers volunteered a
+figure its own citation did not support.
+
+**A gate whose verdict depends on when you asked it is not a gate.** It
+would let a genuinely worse version through on a lucky run and block a
+good one on an unlucky one, and once people notice that, they re-run it
+until it agrees with them. At that point the check has become a
+formality, which is worse than not having one, because everybody still
+believes the number.
+
+Temperature zero asks for the single most likely answer rather than a
+sample. Three consecutive runs now give 46 of 48 with no unsupported
+figures, every time.
+
+There was never anything to gain from variety here. Asked what a filing
+says, there is one right answer, and no reason to want it phrased
+differently today than yesterday.
+
+The wider point is the one worth keeping: **the first thing an
+evaluation has to be is repeatable.** A number that moves on its own
+measures the weather, and the fact that it happened to be a *good*
+number twice is what made it easy to miss.
+
 ## Why a small model on purpose
 
 If the quality came from the model, this would be an advertisement for

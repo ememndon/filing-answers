@@ -123,6 +123,26 @@ class ModelCall(Protocol):
     ) -> dict[str, Any] | None: ...
 
 
+#: Ask the model for the single most likely answer rather than a sample
+#: from the plausible ones.
+#:
+#: This was missing, and its absence made the release gate weaker than it
+#: looked. Run twice against identical code, the evaluation scored 95.8%
+#: and then 91.7%, failing the second time. Nothing had changed but the
+#: model's willingness to phrase things differently.
+#:
+#: A gate whose answer depends on when you asked it cannot do its job. It
+#: would let a genuinely worse version through on a lucky run and block a
+#: good one on an unlucky one, and either outcome teaches people to
+#: re-run it until it agrees with them, which is the same as not having
+#: a gate at all.
+#:
+#: There is nothing to be gained from variety here in any case. Asked
+#: what a filing says, there is one right answer and no reason to want a
+#: different phrasing of it today than yesterday.
+TEMPERATURE = 0.0
+
+
 def anthropic_caller(api_key: str, model: str, timeout: float = 30.0) -> ModelCall:
     """A ModelCall backed by Anthropic, forced through the tool."""
     from anthropic import Anthropic
@@ -133,6 +153,7 @@ def anthropic_caller(api_key: str, model: str, timeout: float = 30.0) -> ModelCa
         response = client.messages.create(
             model=model,
             max_tokens=1024,
+            temperature=TEMPERATURE,
             system=system,
             tools=[tool],  # type: ignore[arg-type]
             # Forcing the tool is what turns "usually JSON" into "always
