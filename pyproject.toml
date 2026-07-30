@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "filing-answers"
+version = "0.1.0"
+description = "Answers questions about company filings, cites its source, and blocks releases that stop being supported by it"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Emem Ndon", email = "projects@ememndon.com" }]
+
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "httpx>=0.28",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+  "anthropic>=0.40",
+  "duckdb>=1.1",
+  "structlog>=24.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.8",
+]
+
+[project.urls]
+Source = "https://github.com/ememndon/filing-answers"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/filing_answers"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Tests never read .env. Config comes from the environment, and a stray
+# .env on one machine deciding whether tests pass is a debugging session
+# nobody enjoys — so every test states the environment it needs.
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]

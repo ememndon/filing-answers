@@ -1,0 +1,31 @@
+# Secrets. This file exists before anything else in the repo, because the
+# repository is public and a committed API key is scraped within minutes
+# of being pushed — long before anyone could notice and revoke it.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Local data: downloaded filings and anything derived from them. The repo
+# ships the code that fetches them, not gigabytes of someone else's PDFs.
+data/
+*.duckdb
+*.sqlite
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
