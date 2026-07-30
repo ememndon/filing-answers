@@ -26,19 +26,26 @@ refuses to start rather than failing on its first real request.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 import structlog
 from anthropic import APIError
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .answer import anthropic_caller
 from .config import Settings, settings
 from .edgar import EdgarClient, FilingNotFoundError, UnknownTickerError
-from .pipeline import AnswerService, Result
+from .pipeline import AnswerService, Excerpt, Result
 
 log = structlog.get_logger()
+
+#: The single page. Beside the code so it travels with the package
+#: wherever it is installed, rather than being found relative to a
+#: working directory that a container does not share.
+PAGE = Path(__file__).parent / "static" / "index.html"
 
 
 class Question(BaseModel):
@@ -131,10 +138,22 @@ async def ready(request: Request) -> Health:
     return Health(status="ready", filings_cached=held(request))
 
 
+@app.get("/", include_in_schema=False)
+async def page() -> FileResponse:
+    """The screen.
+
+    One file, serving one purpose: making the withheld case visible.
+    Reading in a terminal that an answer was refused is not the same as
+    watching one get refused, and the second is what the project is for.
+    """
+    return FileResponse(PAGE, media_type="text/html")
+
+
 @app.post("/ask", response_model=Result, summary="Ask a question about a filing")
 async def ask(
     request: Question,
     service: Annotated[AnswerService, Depends(current_service)],
+    include_passages: bool = False,
 ) -> Result:
     """Answer a question from the company's most recent annual report.
 
@@ -159,6 +178,11 @@ async def ask(
         # carry request details, and a caller does not need them.
         log.error("model call failed", error=str(upstream))
         raise HTTPException(status_code=502, detail="the model could not be reached") from upstream
+
+    if include_passages:
+        result.considered = [
+            Excerpt(index=p.index, section=p.section, text=p.text) for p in trace.considered
+        ]
 
     log.info(
         "answered",

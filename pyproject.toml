@@ -50,3 +50,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+
+# The page is data the package serves, so it ships inside the wheel
+# rather than being found relative to a working directory.
+[tool.hatch.build.targets.wheel.force-include]
+"src/filing_answers/static" = "filing_answers/static"

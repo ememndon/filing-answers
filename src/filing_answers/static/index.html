@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>filing-answers</title>
+<style>
+  /* One file, no fonts or scripts fetched from anywhere. The page works
+     on a machine with no internet beyond this service, which is the
+     least a tool for reading documents should manage. */
+  :root {
+    --ink: #16181d;
+    --muted: #5c636e;
+    --faint: #8b929c;
+    --line: #e3e6ea;
+    --page: #f7f8fa;
+    --card: #ffffff;
+    --good: #1d7a4c;
+    --good-bg: #eaf6ef;
+    --bad: #a32b1e;
+    --bad-bg: #fdeeec;
+    --quiet: #6a5b1f;
+    --quiet-bg: #fbf5e3;
+    --accent: #1f3a5f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e8eaed; --muted: #a0a7b2; --faint: #767d88;
+      --line: #2a2f37; --page: #14161a; --card: #1b1e24;
+      --good: #6ed49b; --good-bg: #16291f;
+      --bad: #f0897c; --bad-bg: #2c1a18;
+      --quiet: #d9c47a; --quiet-bg: #292314;
+      --accent: #9db8dc;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1.25rem 5rem;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 46rem; margin: 0 auto; }
+
+  header { margin-bottom: 2rem; }
+  h1 { font-size: 1.5rem; margin: 0 0 .35rem; letter-spacing: -.01em; }
+  .strap { color: var(--muted); margin: 0; max-width: 34rem; }
+
+  form {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 1.25rem;
+  }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; }
+  label { display: block; font-size: .8rem; font-weight: 600;
+          color: var(--muted); margin-bottom: .3rem; }
+  select, input[type=text] {
+    font: inherit; color: var(--ink); background: var(--page);
+    border: 1px solid var(--line); border-radius: 7px; padding: .6rem .7rem;
+  }
+  select { min-width: 13rem; }
+  .grow { flex: 1 1 18rem; }
+  .grow input { width: 100%; }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer;
+    background: var(--accent); color: var(--card);
+    border: 0; border-radius: 7px; padding: .65rem 1.4rem; margin-top: 1rem;
+  }
+  button:disabled { opacity: .55; cursor: progress; }
+
+  .examples { margin-top: 1rem; }
+  .examples span { font-size: .8rem; color: var(--faint); margin-right: .4rem; }
+  .chip {
+    font: inherit; font-size: .82rem; cursor: pointer;
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: .25rem .7rem; margin: .25rem .25rem 0 0;
+  }
+
+  #out { margin-top: 1.5rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-left-width: 4px; border-radius: 10px; padding: 1.15rem 1.25rem;
+  }
+  .card.ok      { border-left-color: var(--good); }
+  .card.blocked { border-left-color: var(--bad); }
+  .card.silent  { border-left-color: var(--quiet); }
+
+  .badge {
+    display: inline-block; font-size: .7rem; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: .2rem .55rem; border-radius: 4px; margin-bottom: .7rem;
+  }
+  .ok      .badge { background: var(--good-bg); color: var(--good); }
+  .blocked .badge { background: var(--bad-bg);  color: var(--bad); }
+  .silent  .badge { background: var(--quiet-bg); color: var(--quiet); }
+
+  .answer { font-size: 1.12rem; margin: 0 0 1rem; }
+  blockquote {
+    margin: 0 0 .5rem; padding: .7rem .9rem;
+    background: var(--page); border-radius: 7px;
+    border-left: 2px solid var(--line);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .85rem; white-space: pre-wrap; overflow-x: auto;
+  }
+  .src { font-size: .82rem; color: var(--muted); }
+  .why { margin: .4rem 0 0; padding-left: 1.1rem; color: var(--bad); font-size: .9rem; }
+
+  details { margin-top: 1rem; }
+  summary { cursor: pointer; font-size: .84rem; color: var(--muted); }
+  .passage {
+    margin-top: .7rem; padding: .6rem .8rem; background: var(--page);
+    border-radius: 7px; font-size: .8rem; white-space: pre-wrap;
+    max-height: 11rem; overflow-y: auto;
+  }
+  .passage b { color: var(--faint); font-weight: 600; }
+
+  footer { margin-top: 3rem; font-size: .82rem; color: var(--faint); }
+  footer a { color: var(--accent); }
+  .err { color: var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>filing-answers</h1>
+    <p class="strap">
+      Ask a question about a company's latest annual report. Every answer
+      carries the sentence it came from — and any answer that cannot be
+      supported by its own source is withheld rather than shown.
+    </p>
+  </header>
+
+  <form id="ask">
+    <div class="row">
+      <div>
+        <label for="ticker">Company</label>
+        <select id="ticker">
+          <option value="BLK">BlackRock (BLK)</option>
+          <option value="AAPL">Apple (AAPL)</option>
+          <option value="MSFT">Microsoft (MSFT)</option>
+          <option value="JPM">JPMorgan Chase (JPM)</option>
+          <option value="NVDA">NVIDIA (NVDA)</option>
+          <option value="XOM">Exxon Mobil (XOM)</option>
+        </select>
+      </div>
+      <div class="grow">
+        <label for="q">Question</label>
+        <input id="q" type="text" autocomplete="off"
+               value="What was total revenue in 2025?">
+      </div>
+    </div>
+    <button id="go" type="submit">Ask the filing</button>
+
+    <div class="examples">
+      <span>Try:</span>
+      <button type="button" class="chip" data-t="BLK"
+              data-q="How many employees does BlackRock have?">headcount</button>
+      <button type="button" class="chip" data-t="AAPL"
+              data-q="What were total net sales in fiscal 2024?">a prior year</button>
+      <button type="button" class="chip" data-t="MSFT"
+              data-q="How much did Microsoft spend on research and development in fiscal 2026?">R&amp;D spend</button>
+      <button type="button" class="chip" data-t="AAPL"
+              data-q="How many iPhone units did the Company sell in fiscal 2025?">something not disclosed</button>
+    </div>
+  </form>
+
+  <div id="out"></div>
+
+  <footer>
+    First question about a company takes a few seconds — the filing is
+    fetched from the SEC and cut into passages. After that it is held in
+    memory. <a href="/docs">API docs</a> · <a href="/ready">readiness</a>
+  </footer>
+</main>
+
+<script>
+const out = document.getElementById('out');
+const go = document.getElementById('go');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+document.querySelectorAll('.chip').forEach(chip =>
+  chip.addEventListener('click', () => {
+    document.getElementById('ticker').value = chip.dataset.t;
+    document.getElementById('q').value = chip.dataset.q;
+    document.getElementById('ask').requestSubmit();
+  }));
+
+function read(passages) {
+  if (!passages || !passages.length) return '';
+  const items = passages.map(p =>
+    `<div class="passage"><b>passage ${esc(p.index)} · ${esc(p.section || 'unlabelled')}</b>
+${esc(p.text)}</div>`).join('');
+  return `<details><summary>What it read — ${passages.length} passages, chosen from the whole filing</summary>${items}</details>`;
+}
+
+function show(r) {
+  // Three states, and they are genuinely different things: an answer
+  // that stands up, an answer that was thrown away, and the filing
+  // simply not containing what was asked.
+  if (!r.verified) {
+    return `<div class="card blocked">
+      <span class="badge">Withheld</span>
+      <p class="answer">${esc(r.answer)}</p>
+      <ul class="why">${r.rejected_because.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+      ${read(r.considered)}</div>`;
+  }
+  if (!r.citation) {
+    return `<div class="card silent">
+      <span class="badge">Not in the filing</span>
+      <p class="answer">${esc(r.answer)}</p>
+      ${read(r.considered)}</div>`;
+  }
+  return `<div class="card ok">
+    <span class="badge">Verified against the filing</span>
+    <p class="answer">${esc(r.answer)}</p>
+    <blockquote>${esc(r.citation)}</blockquote>
+    <p class="src">— ${esc(r.source)}</p>
+    ${read(r.considered)}</div>`;
+}
+
+document.getElementById('ask').addEventListener('submit', async event => {
+  event.preventDefault();
+  const ticker = document.getElementById('ticker').value;
+  const question = document.getElementById('q').value.trim();
+  if (question.length < 5) return;
+
+  go.disabled = true;
+  out.innerHTML = '<div class="card"><p class="src">Reading the filing…</p></div>';
+  try {
+    const response = await fetch('/ask?include_passages=true', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ticker, question}),
+    });
+    const body = await response.json();
+    out.innerHTML = response.ok
+      ? show(body)
+      : `<div class="card blocked"><span class="badge">Could not ask</span>
+         <p class="answer err">${esc(body.detail?.[0]?.msg || body.detail || 'Something went wrong.')}</p></div>`;
+  } catch (problem) {
+    out.innerHTML = `<div class="card blocked"><span class="badge">Could not ask</span>
+      <p class="answer err">${esc(problem.message)}</p></div>`;
+  } finally {
+    go.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

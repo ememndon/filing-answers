@@ -52,6 +52,24 @@ PASSAGES_PER_QUESTION = 8
 WITHHELD = "The answer could not be verified against the filing, so it has been withheld."
 
 
+class Excerpt(BaseModel):
+    """A passage the model was given, as it appears in the filing.
+
+    Offered so that a reader can see what the answer was chosen from
+    rather than only what was chosen. It is the retrieval step that
+    decides what is answerable at all, and it is the step most likely to
+    be quietly wrong — showing its working is how somebody notices.
+
+    Safe to return, and worth being clear about why: this is text copied
+    out of a public document, not anything a model produced. Nothing
+    here has been generated, so nothing here can have been invented.
+    """
+
+    index: int
+    section: str | None = None
+    text: str
+
+
 class Result(BaseModel):
     """What a caller receives. Nothing unverified reaches this."""
 
@@ -65,6 +83,14 @@ class Result(BaseModel):
     rejected_because: list[str] = Field(
         default_factory=list,
         description="Why an answer was withheld, when one was",
+    )
+
+    considered: list[Excerpt] = Field(
+        default_factory=list,
+        description=(
+            "The passages the model was shown, when the caller asked to see them. "
+            "Verbatim filing text, never model output"
+        ),
     )
 
     #: The text that failed the check. Kept for the evaluation and the
