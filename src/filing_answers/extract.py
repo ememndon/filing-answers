@@ -87,10 +87,84 @@ def _is_inline(tag: str) -> bool:
 #: A 10-K is organised into numbered items, and naming the item a passage
 #: came from turns "somewhere in a 300-page document" into a citation a
 #: reader can check.
-ITEM_HEADING = re.compile(
-    r"^item\s+(\d{1,2}[A-C]?)\s*[.:–—-]?\s*(.{0,80})$",
+ITEM_HEADING = re.compile(r"^item\s+(\d{1,2}[A-C]?)(?:[.:\s–—-]|$)", re.IGNORECASE)
+
+#: A heading is a title, and a title is short. Some filings run a whole
+#: section into one line that starts with its own heading, and without a
+#: length guard every such line would be read as a fresh heading.
+#:
+#: The guard was originally on characters, capped at eighty, which is
+#: where this went wrong: it silently discarded the four longest headings
+#: in a 10-K — Items 5, 7, 9 and 12 — because their titles are simply
+#: long. "Item 7. Management's Discussion and Analysis of Financial
+#: Condition and Results of Operations" is ninety-seven characters, so
+#: the most-quoted section of the entire document went unrecognised and
+#: everything in it was filed under the item before it.
+#:
+#: Words separate the two cases where characters did not. Real headings
+#: in a 10-K run to seventeen words at the very most; a section body that
+#: happens to begin with its own heading runs to hundreds.
+MAX_HEADING_WORDS = 25
+
+#: The financial statements belong to Item 8, and a 10-K does not print
+#: them there. Item 8 is a single line saying the accounts appear at the
+#: back; the auditor's report, the consolidated statements and the notes
+#: then follow Items 15 and 16 physically, at the end of the document.
+#:
+#: Read literally that puts every figure in the accounts under "Item 16.
+#: Form 10-K Summary", a section whose entire content in BlackRock's
+#: filing is the words "Not applicable". A revenue figure cited to it is
+#: wrong in a way any reader of accounts would spot immediately, so the
+#: statements are recognised by their own headings and returned to the
+#: item they actually belong to.
+#:
+#: Matched at the start of a line and not length-limited, because a
+#: filing routinely runs the heading straight into the paragraph under
+#: it: the auditor's report arrives as one line beginning "Opinion on
+#: the Financial Statements We have audited the accompanying...".
+FINANCIAL_STATEMENTS = re.compile(
+    r"^(?:report of independent registered public accounting firm"
+    r"|opinion on the financial statements"
+    r"|notes? to (?:the )?consolidated financial statements"
+    r"|consolidated statements? of (?:income|operations|financial condition"
+    r"|cash flows?|comprehensive income|changes in equity|stockholders))",
     re.IGNORECASE,
 )
+
+#: The most words a line in capitals can hold and still be a heading.
+MAX_SUBHEADING_WORDS = 8
+
+
+def is_subheading(line: str) -> bool:
+    """Whether a line is a heading below item level, set in capitals.
+
+    A 10-K divides its items with headings a reader can see and the
+    markup does not distinguish: COMPETITION, HUMAN CAPITAL, AVAILABLE
+    INFORMATION. Walking past them glues unrelated sections into one
+    passage, and a passage about three subjects answers questions about
+    none of them well.
+
+    That is not hypothetical. BlackRock's headcount — "approximately
+    24,900 employees in more than 30 countries" — sat sixteen hundred
+    characters into a passage that opened with risk analytics and ran
+    through competition before reaching it. Asked how many people
+    BlackRock employs, the search returned three passages about
+    communications and training instead, because they were about
+    employees and nothing else, while the passage holding the answer was
+    mostly about something else entirely.
+
+    Figures are what keep this from firing on the accounts. A financial
+    statement is full of lines like "EMEA  2,819,058  236,157" that are
+    capitalised and short and are rows of data, not headings.
+    """
+    words = line.split()
+    if not 1 <= len(words) <= MAX_SUBHEADING_WORDS:
+        return False
+    if any(character.isdigit() for character in line):
+        return False
+    letters = [character for character in line if character.isalpha()]
+    return len(letters) >= 3 and all(character.isupper() for character in letters)
+
 
 #: Passages shorter than this are headings, page numbers and table
 #: furniture rather than anything a question could be answered from.
@@ -99,6 +173,19 @@ MIN_PASSAGE_CHARS = 80
 #: Long enough to hold a whole disclosure, short enough that quoting it
 #: back to someone is still a quotation rather than a chapter.
 MAX_PASSAGE_CHARS = 2_000
+
+
+#: A quantity, as opposed to a digit. A figure a question could be
+#: answered with is either large, or carries a currency or percent sign:
+#: 24,900 · $1.5 · 6% · 2025.
+#:
+#: The distinction is not pedantry. Searching for a headcount in
+#: BlackRock's filing, the first version of this counted "(1) attract,
+#: (2) align, (3) support" as a passage full of figures and ranked it
+#: above the passage reading "approximately 24,900 employees in more than
+#: 30 countries". Numbered list markers are punctuation, and treating
+#: them as data pushed the answer off the page.
+QUANTITY = re.compile(r"\$\s*\d|\d\s*%|\b\d{2,}\b")
 
 
 class Passage(BaseModel):
@@ -113,8 +200,8 @@ class Passage(BaseModel):
 
     @property
     def has_figures(self) -> bool:
-        """Whether this passage contains anything a reader would call a number."""
-        return bool(re.search(r"\d", self.text))
+        """Whether this passage holds a quantity a question could be answered with."""
+        return bool(QUANTITY.search(self.text))
 
 
 def _clean_tree(html_text: str) -> etree._Element:
@@ -304,7 +391,14 @@ def _split_long(line: str, limit: int) -> list[str]:
 
 def _section_of(line: str, current: str | None) -> str | None:
     """The item heading a line announces, or the one still in force."""
-    match = ITEM_HEADING.match(line.strip())
+    stripped = line.strip()
+    # Checked before the length guard, because these headings are the ones
+    # that arrive with a paragraph attached.
+    if FINANCIAL_STATEMENTS.match(stripped):
+        return "Item 8"
+    if len(stripped.split()) > MAX_HEADING_WORDS:
+        return current
+    match = ITEM_HEADING.match(stripped)
     if not match:
         return current
     # A 10-K names each item twice: once in the contents at the front, and
@@ -348,6 +442,11 @@ def passages(html_text: str) -> list[Passage]:
             # would attach a citation to the wrong part of the document.
             flush()
             section = found
+        elif is_subheading(stripped):
+            # A heading below item level starts one too, and then stays
+            # at the head of the passage it opened — which is where it is
+            # most useful, since it says what the passage is about.
+            flush()
 
         # One paragraph can be longer than a whole passage, so a line is
         # not necessarily a unit that fits.
@@ -361,17 +460,61 @@ def passages(html_text: str) -> list[Passage]:
     return out
 
 
+#: Characters a filing uses and a model, copying it faithfully, does not
+#: reproduce. Typesetting puts a curly apostrophe in "the Company's" and
+#: an en dash in a range of years; a model transcribing that sentence
+#: writes the apostrophe and the hyphen on its keyboard.
+#:
+#: This cost a correct answer. Asked BlackRock's headcount, the model
+#: found it, quoted the sentence word for word, and was refused — the
+#: filing had written "Company’s" and the model had written "Company's".
+#: One character, and a true answer with a real source was thrown away.
+#:
+#: Folding these cannot help a model invent anything. Nothing here
+#: changes a word, a number or the meaning of a sentence; it only stops
+#: a difference in typesetting being mistaken for a difference in fact.
+TYPOGRAPHY = str.maketrans(
+    {
+        "‘": "'",
+        "’": "'",
+        "‛": "'",
+        "ʼ": "'",
+        "´": "'",
+        "“": '"',
+        "”": '"',
+        "„": '"',
+        "‐": "-",
+        "‑": "-",
+        "‒": "-",
+        "–": "-",
+        "—": "-",
+        "―": "-",
+        "−": "-",
+    }
+)
+
+
+def comparable(text: str) -> str:
+    """Text reduced to what a comparison should actually care about.
+
+    Typography folded, whitespace collapsed, case dropped. Everything
+    that survives is a word, a number or a mark that changes meaning.
+    """
+    return " ".join(text.translate(TYPOGRAPHY).split()).lower()
+
+
 def find_passage(all_passages: list[Passage], quote: str) -> Passage | None:
     """The passage a quote came from, if any did.
 
-    Whitespace is normalised on both sides because a quote that travelled
-    through a model comes back with its line breaks rearranged, and that
-    is not the kind of difference worth rejecting an answer over.
+    Whitespace and typography are normalised on both sides because a
+    quote that travelled through a model comes back with its line breaks
+    rearranged and its curly apostrophes straightened, and neither is the
+    kind of difference worth rejecting an answer over.
     """
-    needle = " ".join(quote.split()).lower()
+    needle = comparable(quote)
     if len(needle) < 20:
         return None
     for passage in all_passages:
-        if needle in " ".join(passage.text.split()).lower():
+        if needle in comparable(passage.text):
             return passage
     return None

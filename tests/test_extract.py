@@ -17,7 +17,10 @@ from __future__ import annotations
 from filing_answers.extract import (
     MAX_PASSAGE_CHARS,
     Passage,
+    _section_of,
+    comparable,
     find_passage,
+    is_subheading,
     passages,
 )
 
@@ -188,3 +191,164 @@ class TestFindPassage:
     def test_refuses_a_fragment_too_short_to_identify_anything(self) -> None:
         # a few words match half the document and prove nothing
         assert find_passage(self.build(), "net sales") is None
+
+
+class TestHeadingsThatAreLong:
+    """Items 5, 7, 9 and 12 have long titles, and were being lost.
+
+    The first version of this capped the text after "Item N" at eighty
+    characters, which quietly discarded the four longest headings in a
+    10-K. Item 7 is the Management's Discussion — the most-quoted section
+    of the document — and everything in it was being filed under Item 6.
+    """
+
+    def test_recognises_the_management_discussion(self) -> None:
+        line = (
+            "Item 7  Management's Discussion and Analysis of Financial Condition "
+            "and Results of Operations  38"
+        )
+        assert _section_of(line, "Item 6") == "Item 7"
+
+    def test_recognises_the_other_three_long_ones(self) -> None:
+        for line, expected in [
+            (
+                "Item 5  Market for Registrant's Common Equity, Related Stockholder "
+                "Matters and Issuer Purchases of Equity Securities  37",
+                "Item 5",
+            ),
+            (
+                "Item 9  Changes in and Disagreements with Accountants on Accounting "
+                "and Financial Disclosure  65",
+                "Item 9",
+            ),
+            (
+                "Item 12  Security Ownership of Certain Beneficial Owners and "
+                "Management and Related Stockholder Matters  68",
+                "Item 12",
+            ),
+        ]:
+            assert _section_of(line, None) == expected
+
+    def test_still_refuses_a_whole_section_that_begins_with_its_own_heading(self) -> None:
+        # the case the length guard exists for: BlackRock's filing runs
+        # all of Item 1C into one 900-word line starting "Item 1C."
+        run_on = "Item 1C. Cybersecurity " + "BlackRock manages cyber risk carefully. " * 60
+        assert _section_of(run_on, "Item 1") == "Item 1"
+
+    def test_recognises_a_heading_with_nothing_after_it(self) -> None:
+        assert _section_of("Item 8", None) == "Item 8"
+
+
+class TestTheFinancialStatements:
+    """A 10-K prints the accounts after Item 15, not under Item 8.
+
+    Read literally that files every figure in the consolidated accounts
+    under "Item 16. Form 10-K Summary", whose entire content in
+    BlackRock's filing is the words "Not applicable".
+    """
+
+    def test_the_auditors_report_returns_to_item_8(self) -> None:
+        line = (
+            "Opinion on the Financial Statements We have audited the accompanying "
+            "consolidated statements of financial condition of BlackRock, Inc."
+        )
+        assert _section_of(line, "Item 16") == "Item 8"
+
+    def test_so_do_the_statements_and_the_notes(self) -> None:
+        for line in [
+            "Report of Independent Registered Public Accounting Firm",
+            "Consolidated Statements of Income",
+            "Consolidated Statement of Financial Condition",
+            "Consolidated Statements of Cash Flows",
+            "Notes to the Consolidated Financial Statements",
+        ]:
+            assert _section_of(line, "Item 16") == "Item 8", line
+
+    def test_a_later_item_heading_still_takes_over(self) -> None:
+        # returning the accounts to Item 8 must not pin the section there
+        assert _section_of("Item 9A  Controls and Procedures", "Item 8") == "Item 9A"
+
+
+class TestSubheadings:
+    """Filings divide items with headings set in capitals.
+
+    Walking past them glued BlackRock's headcount to the end of a passage
+    about risk analytics and competition, where no search would find it.
+    """
+
+    def test_a_short_line_in_capitals_is_a_heading(self) -> None:
+        assert is_subheading("HUMAN CAPITAL")
+        assert is_subheading("COMPETITION")
+        assert is_subheading("AVAILABLE INFORMATION")
+
+    def test_a_row_of_figures_in_capitals_is_not(self) -> None:
+        # the accounts are full of these, and breaking on them would cut
+        # financial statements into unreadable fragments
+        assert not is_subheading("EMEA  2,819,058  236,157  (8,762  21,922")
+        assert not is_subheading("GAAP:  2025  2024  2023  2022  2021")
+
+    def test_ordinary_prose_is_not(self) -> None:
+        assert not is_subheading("BlackRock competes with investment management firms.")
+        assert not is_subheading("THE COMPANY BELIEVES THAT ITS RESULTS FOR THE YEAR WERE STRONG")
+
+    def test_the_heading_starts_the_passage_it_introduces(self) -> None:
+        html = f"""<html><body>
+        <p>{"Risk analytics are managed by a dedicated group. " * 4}</p>
+        <p>HUMAN CAPITAL</p>
+        <p>With approximately 24,900 employees in more than 30 countries as of
+        December 31, 2025, BlackRock provides a broad range of services to
+        clients in more than 100 countries across the globe and depends on
+        its people for its long-term success in every market it operates in.</p>
+        </body></html>"""
+        found = passages(html)
+        holding = [p for p in found if "24,900" in p.text]
+        assert len(holding) == 1
+        assert holding[0].text.startswith("HUMAN CAPITAL")
+        assert "Risk analytics" not in holding[0].text
+
+
+class TestWhatCountsAsAFigure:
+    """A quantity, not a digit.
+
+    Searching for a headcount, the first version of this counted
+    "(1) attract, (2) align, (3) support" as a passage full of figures
+    and ranked it above one reading "approximately 24,900 employees".
+    """
+
+    def test_numbered_list_markers_are_not_figures(self) -> None:
+        listy = Passage(
+            text="Practices are designed to: (1) attract talent; (2) align incentives; "
+            "and (3) support employees across many aspects of their lives.",
+            index=0,
+        )
+        assert not listy.has_figures
+
+    def test_amounts_percentages_and_counts_are(self) -> None:
+        for text in [
+            "approximately 24,900 employees in more than 30 countries",
+            "revenue of $5 million",
+            "sales grew 6% during the year",
+            "as of December 31, 2025",
+        ]:
+            assert Passage(text=text, index=0).has_figures, text
+
+
+class TestTypography:
+    """A filing is typeset; a model transcribing it uses a keyboard."""
+
+    def test_a_curly_apostrophe_reads_the_same_as_a_straight_one(self) -> None:
+        # the difference that threw away a correct answer about BlackRock's
+        # headcount: the filing wrote "Company’s", the model wrote "Company's"
+        assert comparable("Of the Company’s employees") == comparable("Of the Company's employees")
+
+    def test_dashes_of_every_width_read_alike(self) -> None:
+        assert comparable("2024–2025") == comparable("2024-2025")
+        assert comparable("a — b") == comparable("a - b")
+
+    def test_curly_quotation_marks_read_as_plain_ones(self) -> None:
+        assert comparable("“AUM”") == comparable('"AUM"')
+
+    def test_words_and_figures_are_left_exactly_as_they_are(self) -> None:
+        # the folding must not be able to turn one number into another
+        assert comparable("391,035") != comparable("391035")
+        assert comparable("net sales rose") != comparable("net sales fell")

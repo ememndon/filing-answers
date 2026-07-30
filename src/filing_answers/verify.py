@@ -28,7 +28,7 @@ from decimal import Decimal, InvalidOperation
 from pydantic import BaseModel, Field
 
 from .answer import Answer
-from .extract import Passage
+from .extract import Passage, comparable
 
 #: Anything a reader would call a figure: 391,035 · 46.2 · 2025 · 1.5
 FIGURE = re.compile(r"\d[\d,]*(?:\.\d+)?")
@@ -63,10 +63,6 @@ class Verdict(BaseModel):
         return "supported by the citation" if self.verified else "; ".join(self.reasons)
 
 
-def _normalise(text: str) -> str:
-    return " ".join(text.split()).lower()
-
-
 def figures_in(text: str) -> list[str]:
     """Every figure in a piece of text, as written."""
     return FIGURE.findall(text)
@@ -90,14 +86,18 @@ def _value(figure: str) -> Decimal | None:
 def quote_is_real(quote: str, passage: Passage) -> bool:
     """Whether the cited sentence actually appears in the cited passage.
 
-    Whitespace is normalised on both sides. A model copying a line
-    accurately still returns it with the line breaks rearranged, and
-    rejecting an answer over that would fail honest work while catching
-    no dishonest work at all.
+    Whitespace and typography are normalised on both sides. A model
+    copying a line accurately still returns it with the line breaks
+    rearranged and the filing's curly apostrophes replaced by the ones on
+    its keyboard, and rejecting an answer over either would fail honest
+    work while catching no dishonest work at all.
+
+    Every word and every figure still has to match exactly. Nothing in
+    the folding lets an invented sentence pass.
     """
     if len(quote.strip()) < MIN_QUOTE_CHARS:
         return False
-    return _normalise(quote) in _normalise(passage.text)
+    return comparable(quote) in comparable(passage.text)
 
 
 def unsupported_figures(answer_text: str, passage: Passage) -> list[str]:

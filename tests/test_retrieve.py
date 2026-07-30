@@ -10,7 +10,13 @@ phrased.
 from __future__ import annotations
 
 from filing_answers.extract import Passage
-from filing_answers.retrieve import Index, context_for, tokenise
+from filing_answers.retrieve import (
+    Index,
+    answers_beside_a_figure,
+    context_for,
+    stem,
+    tokenise,
+)
 
 
 def passage(index: int, text: str, section: str | None = None) -> Passage:
@@ -124,3 +130,97 @@ class TestEmptyDocument:
 
     def test_a_question_of_nothing_but_stop_words_returns_nothing(self) -> None:
         assert Index(FILING).search("the and of it") == []
+
+
+class TestSingularAndPlural:
+    """One letter stood between a good answer and no answer at all.
+
+    Asked "what were total revenues in 2025?" against BlackRock's annual
+    report, the search found nothing useful and the model correctly
+    refused — while the figure sat in a passage headed "Total revenue".
+    """
+
+    def test_a_plural_question_finds_a_singular_passage(self) -> None:
+        assert stem("revenues") == stem("revenue")
+        assert stem("employees") == stem("employee")
+        assert stem("sales") == stem("sale")
+        assert stem("liabilities") == stem("liability")
+
+    def test_a_double_s_is_part_of_the_word(self) -> None:
+        assert stem("gross") == "gross"
+        assert stem("business") == "business"
+        assert stem("loss") == stem("losses")
+
+    def test_figures_are_never_folded(self) -> None:
+        # trimming a character off a number would make two different
+        # figures look like one, which is the failure the whole project
+        # exists to catch
+        assert "391,035" in tokenise("Total net sales were 391,035 million")
+        assert "2025" in tokenise("during 2025")
+
+    def test_a_question_and_a_passage_meet_in_the_middle(self) -> None:
+        index = Index(
+            [
+                Passage(text="Total revenue  24,216  20,407  17,859 for the year.", index=0),
+                Passage(text="The Company operates across many global regions.", index=1),
+            ]
+        )
+        top = index.search("What were total revenues in 2025?")
+        assert top and top[0].passage.index == 0
+
+
+class TestAnswersBesideAFigure:
+    """A word next to a number, not a word repeated often.
+
+    Word counting could not tell "approximately 24,900 employees" from
+    "works to keep employees informed and engaged", and ranked the second
+    above the first.
+    """
+
+    def test_sees_a_term_sitting_next_to_a_quantity(self) -> None:
+        assert answers_beside_a_figure(
+            "With approximately 24,900 employees in more than 30 countries", {"employe"}
+        )
+
+    def test_does_not_see_one_that_is_nowhere_near(self) -> None:
+        far = "BlackRock works to keep employees informed and engaged. " + ("x " * 90) + "2025"
+        assert not answers_beside_a_figure(far, {"employe"})
+
+    def test_says_no_when_there_are_no_quantities_at_all(self) -> None:
+        assert not answers_beside_a_figure("employees are important to us", {"employe"})
+
+    def test_matches_the_stem_rather_than_the_exact_word(self) -> None:
+        assert answers_beside_a_figure("total revenue was 24,216 million", {"revenu"})
+
+
+class TestDiscriminatingTerms:
+    """In BlackRock's own filing, "blackrock" is not a search term."""
+
+    def test_drops_a_term_that_is_everywhere_in_the_document(self) -> None:
+        index = Index(
+            [
+                Passage(text=f"BlackRock does thing number {n} here today.", index=n)
+                for n in range(10)
+            ]
+        )
+        assert "blackrock" not in index.discriminating(["blackrock", "employe"])
+
+    def test_keeps_one_that_is_not(self) -> None:
+        docs = [Passage(text=f"BlackRock does thing number {n} here.", index=n) for n in range(10)]
+        docs.append(Passage(text="BlackRock has 24,900 employees worldwide.", index=10))
+        index = Index(docs)
+        assert "employe" in index.discriminating(["blackrock", "employe"])
+
+    def test_the_common_term_would_otherwise_boost_everything(self) -> None:
+        # the whole point. "blackrock" sits beside a number on nearly
+        # every page of BlackRock's own filing, so leaving it in the set
+        # gave every passage the proximity boost — which is arithmetically
+        # the same as giving it to none of them.
+        generic = "BlackRock was founded in 1988 and has offices in 30 countries."
+        headcount = "With approximately 24,900 employees in more than 30 countries"
+
+        assert answers_beside_a_figure(generic, {"blackrock", "employe"})
+        assert answers_beside_a_figure(headcount, {"blackrock", "employe"})
+
+        assert not answers_beside_a_figure(generic, {"employe"})
+        assert answers_beside_a_figure(headcount, {"employe"})
