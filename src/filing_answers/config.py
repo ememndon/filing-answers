@@ -49,6 +49,21 @@ class Settings(BaseSettings):
 
     request_timeout_seconds: float = Field(default=30.0, gt=0)
 
+    questions_per_visitor: int = Field(
+        default=20,
+        ge=1,
+        description="Questions one caller may ask per hour, so nobody monopolises the demo.",
+    )
+
+    questions_per_day: int = Field(
+        default=500,
+        ge=1,
+        description=(
+            "Questions this service will answer in a day, whoever is asking. "
+            "The ceiling that makes tomorrow's bill a known quantity."
+        ),
+    )
+
     threshold: float = Field(
         default=85.0,
         ge=0,

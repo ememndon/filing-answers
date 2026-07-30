@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 from .answer import anthropic_caller
 from .config import Settings, settings
 from .edgar import EdgarClient, FilingNotFoundError, UnknownTickerError
+from .limits import Limiter, RefusedError
 from .pipeline import AnswerService, Excerpt, Result
 
 log = structlog.get_logger()
@@ -83,7 +84,17 @@ async def lifespan(app: FastAPI):
     # healthy, and returns a stack trace to the first person who uses it.
     config = settings()
     app.state.service = build_service(config)
-    log.info("started", model=config.answer_model, threshold=config.threshold)
+    app.state.limiter = Limiter(
+        per_caller=config.questions_per_visitor,
+        per_day=config.questions_per_day,
+    )
+    log.info(
+        "started",
+        model=config.answer_model,
+        threshold=config.threshold,
+        per_visitor=config.questions_per_visitor,
+        per_day=config.questions_per_day,
+    )
     yield
     app.state.service.close()
 
@@ -152,6 +163,7 @@ async def page() -> FileResponse:
 @app.post("/ask", response_model=Result, summary="Ask a question about a filing")
 async def ask(
     request: Question,
+    http: Request,
     service: Annotated[AnswerService, Depends(current_service)],
     include_passages: bool = False,
 ) -> Result:
@@ -167,6 +179,20 @@ async def ask(
     ticker, and a caller retrying on 5xx would retry a question that is
     going to be refused again.
     """
+    limiter = getattr(http.app.state, "limiter", None)
+    if limiter is not None:
+        try:
+            limiter.check(http.client.host if http.client else "unknown")
+        except RefusedError as refused:
+            # 429 and not 403: nothing is wrong with the request, there
+            # is simply no more budget for it right now, and the caller
+            # is told when to come back rather than left guessing.
+            raise HTTPException(
+                status_code=429,
+                detail=str(refused),
+                headers={"Retry-After": str(refused.retry_after)},
+            ) from refused
+
     try:
         result, trace = service.ask(request.ticker, request.question)
     except UnknownTickerError as unknown:

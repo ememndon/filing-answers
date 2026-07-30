@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 from filing_answers.api import app, current_service
 from filing_answers.edgar import Filing, UnknownTickerError
+from filing_answers.limits import Limiter
 from filing_answers.pipeline import WITHHELD, Result, Trace
 
 FILING = Filing(
@@ -70,8 +71,9 @@ def client_for(service: Any) -> TestClient:
 def clean_up():
     yield
     app.dependency_overrides.clear()
-    if hasattr(app.state, "service"):
-        del app.state.service
+    for held in ("service", "limiter"):
+        if hasattr(app.state, held):
+            delattr(app.state, held)
 
 
 GOOD = Result(
@@ -195,3 +197,43 @@ class TestHealthAndReadiness:
         if hasattr(app.state, "service"):
             del app.state.service
         assert TestClient(app).get("/ready").status_code == 503
+
+
+class TestTheSpendingLimit:
+    """A public URL turns anonymous requests into charges on a card."""
+
+    def setup_client(self, per_day: int = 2):
+        service = FakeService(GOOD)
+        client = client_for(service)
+        app.state.limiter = Limiter(per_caller=100, per_day=per_day)
+        return client, service
+
+    def payload(self) -> dict[str, str]:
+        return {"ticker": "AAPL", "question": "What were total net sales?"}
+
+    def test_answers_up_to_the_daily_ceiling(self) -> None:
+        client, _ = self.setup_client(per_day=2)
+        assert client.post("/ask", json=self.payload()).status_code == 200
+        assert client.post("/ask", json=self.payload()).status_code == 200
+
+    def test_then_refuses_with_429_rather_than_403(self) -> None:
+        # nothing is wrong with the request; there is simply no more
+        # budget for it, and the two deserve different codes
+        client, _ = self.setup_client(per_day=1)
+        client.post("/ask", json=self.payload())
+        refused = client.post("/ask", json=self.payload())
+        assert refused.status_code == 429
+        assert "questions a day" in refused.json()["detail"]
+
+    def test_tells_the_caller_when_to_come_back(self) -> None:
+        client, _ = self.setup_client(per_day=1)
+        client.post("/ask", json=self.payload())
+        refused = client.post("/ask", json=self.payload())
+        assert int(refused.headers["Retry-After"]) > 0
+
+    def test_a_refused_question_never_reaches_the_model(self) -> None:
+        # the whole point: the request is stopped before it costs anything
+        client, service = self.setup_client(per_day=1)
+        client.post("/ask", json=self.payload())
+        client.post("/ask", json=self.payload())
+        assert len(service.asked) == 1
