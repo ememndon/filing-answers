@@ -1,0 +1,409 @@
+{
+  "about": [
+    "Forty-eight questions with known answers, over three real annual reports.",
+    "",
+    "Every expected value here was read out of the filing itself and the line",
+    "it came from is recorded in `source`, so anyone can check the answer key",
+    "rather than take it on trust. A benchmark whose own answers cannot be",
+    "audited measures nothing.",
+    "",
+    "The set is deliberately awkward in three ways.",
+    "",
+    "Prior-year figures are asked for as often as current ones. A financial",
+    "statement puts three years side by side in one row, and picking the wrong",
+    "column is the commonest way to be confidently wrong about a filing.",
+    "",
+    "Both of a company's numbers are asked for where it reports two. BlackRock",
+    "publishes net income twice, once under accounting rules and once 'as",
+    "adjusted', and the two differ by two billion dollars. Only the first is",
+    "the answer.",
+    "",
+    "Six questions have no answer in the filing at all. Apple has not disclosed",
+    "iPhone unit sales since 2018 and no annual report forecasts the year after",
+    "next. Saying so is the correct answer, and a system that cannot say it is",
+    "the dangerous kind."
+  ],
+  "questions": [
+    {
+      "ticker": "AAPL",
+      "question": "What were total net sales in fiscal 2025?",
+      "figures": [
+        "416,161"
+      ],
+      "source": "Item 7 and Item 8: 'Total net sales  416,161  391,035  383,285'"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What were total net sales in fiscal 2024?",
+      "figures": [
+        "391,035"
+      ],
+      "source": "the middle column of the same row, which is the point of asking"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What were total net sales in fiscal 2023?",
+      "figures": [
+        "383,285"
+      ],
+      "source": "the third column of the same row"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What was net income in fiscal 2025?",
+      "figures": [
+        "112,010"
+      ],
+      "source": "Item 8: 'Net income  112,010  93,736  96,995'"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What was net income in fiscal 2024?",
+      "figures": [
+        "93,736"
+      ],
+      "source": "the middle column of the net income row"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "How much cash and cash equivalents did the Company hold at the end of fiscal 2025?",
+      "figures": [
+        "35,934"
+      ],
+      "source": "Item 8 balance sheet: 'Cash and cash equivalents  35,934  29,943'"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What were total assets at the end of fiscal 2025?",
+      "figures": [
+        "359,241"
+      ],
+      "source": "Item 8 balance sheet: 'Total assets  359,241  364,980'"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What were total liabilities at the end of fiscal 2025?",
+      "figures": [
+        "285,508"
+      ],
+      "source": "Item 8 balance sheet: 'Total liabilities  285,508  308,030'"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What was the provision for income taxes in fiscal 2025?",
+      "figures": [
+        "20,719"
+      ],
+      "source": "Item 7 and Item 8: 'Provision for income taxes  20,719  29,749  16,741'"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "How much did the Company spend on research and development in fiscal 2025?",
+      "figures": [
+        "34,550"
+      ],
+      "source": "Item 7: 'Research and development  34,550  10  31,370  5  29,915'"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What was research and development expense in fiscal 2024?",
+      "figures": [
+        "31,370"
+      ],
+      "source": "the same row, two columns along, past an intervening growth percentage"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What were net sales in the Americas segment in fiscal 2025?",
+      "figures": [
+        "178,353"
+      ],
+      "source": "Item 7 segment table: 'Americas  178,353  7  167,045  3  162,560'"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "Which firm audits the Company's financial statements?",
+      "phrases": [
+        "Ernst & Young"
+      ],
+      "source": "Item 8, report of independent registered public accounting firm"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "Where are the Company's headquarters located?",
+      "phrases": [
+        "Cupertino"
+      ],
+      "source": "Item 2: 'The Company's headquarters is located in Cupertino, California.'"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "How many iPhone units did the Company sell in fiscal 2025?",
+      "declines": true,
+      "source": "not disclosed — Apple stopped reporting unit sales in 2018"
+    },
+    {
+      "ticker": "AAPL",
+      "question": "What does the Company forecast net sales will be in fiscal 2027?",
+      "declines": true,
+      "source": "not disclosed — an annual report does not forecast"
+    },
+    {
+      "ticker": "BLK",
+      "question": "What was total revenue in 2025?",
+      "figures": [
+        "24,216"
+      ],
+      "source": "Item 7: 'Total revenue  24,216  20,407'"
+    },
+    {
+      "ticker": "BLK",
+      "question": "What was total revenue in 2024?",
+      "figures": [
+        "20,407"
+      ],
+      "source": "the second column of the same row"
+    },
+    {
+      "ticker": "BLK",
+      "question": "What was net income attributable to BlackRock in 2025?",
+      "figures": [
+        "5,553"
+      ],
+      "source": "Item 1 selected data. The 7,736 on the row below is the same figure 'as adjusted', and is not the answer"
+    },
+    {
+      "ticker": "BLK",
+      "question": "What was operating income in 2025?",
+      "figures": [
+        [
+          "7,045",
+          "7.0"
+        ]
+      ],
+      "source": "Item 7 table: 'Operating income  7,045  7,574', and the sentence beside it: 'Operating income of $7.0 billion decreased $529 million'. Either is the filing's own wording. The 9,600 elsewhere is 'as adjusted' and is not"
+    },
+    {
+      "ticker": "BLK",
+      "question": "What was operating income in 2024?",
+      "figures": [
+        [
+          "7,574",
+          "7.6"
+        ]
+      ],
+      "source": "the second column of the same row — and higher than 2025, so a system assuming growth gets it wrong"
+    },
+    {
+      "ticker": "BLK",
+      "question": "How much cash and cash equivalents did the Company hold at the end of 2025?",
+      "figures": [
+        "11,468"
+      ],
+      "source": "Item 7: 'Cash and cash equivalents (1)  11,468  12,762'"
+    },
+    {
+      "ticker": "BLK",
+      "question": "What were total liabilities at 31 December 2025?",
+      "figures": [
+        "108,456"
+      ],
+      "source": "Item 8 statement of financial condition: 'Total liabilities  108,456  89,260'"
+    },
+    {
+      "ticker": "BLK",
+      "question": "What was income tax expense in 2025?",
+      "figures": [
+        "1,677"
+      ],
+      "source": "Item 7: 'Income tax expense  1,677  1,783'"
+    },
+    {
+      "ticker": "BLK",
+      "question": "What was income tax expense in 2024?",
+      "figures": [
+        "1,783"
+      ],
+      "source": "the second column of the same row"
+    },
+    {
+      "ticker": "BLK",
+      "question": "How many employees does BlackRock have?",
+      "figures": [
+        "24,900"
+      ],
+      "source": "Item 1: 'With approximately 24,900 employees in more than 30 countries as of December 31, 2025'"
+    },
+    {
+      "ticker": "BLK",
+      "question": "How many shares of common stock were outstanding as of 31 January 2026?",
+      "figures": [
+        "155,541,536"
+      ],
+      "source": "cover page: 'As of January 31, 2026, there were 155,541,536 shares of the registrant's common stock outstanding'. The date is in the question because the filing also reports a different count at 31 December, and a question with two right answers tests nothing"
+    },
+    {
+      "ticker": "BLK",
+      "question": "How much did BlackRock have in assets under management at the end of 2025?",
+      "figures": [
+        [
+          "14.0",
+          "14,041,518"
+        ]
+      ],
+      "source": "Item 1 overview says '$14.0 trillion of assets under management (\"AUM\") at December 31, 2025'; the table in Item 7 says 'Assets under management (end of period)  14,041,518'. The same number, three decimal places apart"
+    },
+    {
+      "ticker": "BLK",
+      "question": "In how many countries does BlackRock employ people?",
+      "figures": [
+        "30"
+      ],
+      "source": "Item 1: 'approximately 24,900 employees in more than 30 countries'"
+    },
+    {
+      "ticker": "BLK",
+      "question": "Which firm audits BlackRock's financial statements?",
+      "phrases": [
+        "Deloitte"
+      ],
+      "source": "Item 8, report of independent registered public accounting firm"
+    },
+    {
+      "ticker": "BLK",
+      "question": "What was BlackRock's total revenue in 2019?",
+      "declines": true,
+      "source": "not present — the five-year table starts at 2021"
+    },
+    {
+      "ticker": "BLK",
+      "question": "What fee does BlackRock charge on the iShares Core S&P 500 ETF?",
+      "declines": true,
+      "source": "not disclosed — fund-level fees are in fund prospectuses, not the 10-K"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "What was total revenue in fiscal 2026?",
+      "figures": [
+        "331,839"
+      ],
+      "source": "Item 8: 'Total revenue  331,839  281,724  245,122'"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "What was total revenue in fiscal 2025?",
+      "figures": [
+        "281,724"
+      ],
+      "source": "the middle column of the same row"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "What was net income in fiscal 2026?",
+      "figures": [
+        "133,749"
+      ],
+      "source": "Item 7: 'Net income  133,749  101,832  88,136'"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "What was net income in fiscal 2025?",
+      "figures": [
+        "101,832"
+      ],
+      "source": "the middle column of the same row"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "How much cash and cash equivalents did the Company hold at the end of fiscal 2026?",
+      "figures": [
+        "20,935"
+      ],
+      "source": "Item 8 balance sheet: 'Cash and cash equivalents  20,935  30,242'"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "What were total assets at the end of fiscal 2026?",
+      "figures": [
+        "758,376"
+      ],
+      "source": "Item 8 balance sheet: 'Total assets  758,376  619,003'"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "What were total liabilities at the end of fiscal 2026?",
+      "figures": [
+        "315,989"
+      ],
+      "source": "Item 8 balance sheet: 'Total liabilities  315,989  275,524'"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "What was the provision for income taxes in fiscal 2026?",
+      "figures": [
+        "32,185"
+      ],
+      "source": "Item 8: 'Provision for income taxes  32,185  21,795  19,651'"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "How much did Microsoft spend on research and development in fiscal 2026?",
+      "figures": [
+        "35,562"
+      ],
+      "source": "Item 7: 'Research and development  35,562  32,488  9%'"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "What was research and development expense in fiscal 2025?",
+      "figures": [
+        "32,488"
+      ],
+      "source": "the second column of the same row, before the growth percentage"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "How many people did Microsoft employ at the end of fiscal 2026?",
+      "figures": [
+        "223,000"
+      ],
+      "source": "Item 1: 'As of June 30, 2026, we employed approximately 223,000 people on a full-time basis'"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "How many people did Microsoft employ in the United States?",
+      "figures": [
+        "121,000"
+      ],
+      "source": "the same sentence: '121,000 in the U.S. and 102,000 internationally'"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "By how much did Microsoft Cloud revenue grow in fiscal 2026?",
+      "figures": [
+        "27"
+      ],
+      "source": "Item 7: 'Microsoft Cloud revenue increased 27% to $214.4 billion.'"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "Which firm audits Microsoft's financial statements?",
+      "phrases": [
+        "Deloitte"
+      ],
+      "source": "Item 7 and Item 8, report of independent registered public accounting firm"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "How many Xbox consoles did Microsoft sell in fiscal 2026?",
+      "declines": true,
+      "source": "not disclosed — Microsoft reports gaming revenue, not console units"
+    },
+    {
+      "ticker": "MSFT",
+      "question": "What does Microsoft forecast revenue will be in fiscal 2029?",
+      "declines": true,
+      "source": "not disclosed — an annual report does not forecast"
+    }
+  ]
+}

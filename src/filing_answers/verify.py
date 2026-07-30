@@ -31,7 +31,15 @@ from .answer import Answer
 from .extract import Passage, comparable
 
 #: Anything a reader would call a figure: 391,035 · 46.2 · 2025 · 1.5
-FIGURE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+#:
+#: It has to end on a digit. Without that, "as of December 31, 2025, sales
+#: rose" yields the figure "2025," with the sentence's comma attached, and
+#: a rejection notice reading "the citation does not contain 2025,," which
+#: is a puzzle rather than an explanation.
+FIGURE = re.compile(r"\d(?:[\d,]*\d)?(?:\.\d+)?")
+
+#: A year, which in an answer is almost always a label rather than a claim.
+YEAR = re.compile(r"^(?:19|20)\d{2}$")
 
 #: A quote shorter than this identifies nothing. Half a dozen words appear
 #: all over a filing, so matching one proves the model can echo common
@@ -68,7 +76,7 @@ def figures_in(text: str) -> list[str]:
     return FIGURE.findall(text)
 
 
-def _value(figure: str) -> Decimal | None:
+def figure_value(figure: str) -> Decimal | None:
     """A figure as a number, so 391,035 and 391035 are the same thing.
 
     Comparing the written form would reject an answer for using a comma
@@ -100,14 +108,34 @@ def quote_is_real(quote: str, passage: Passage) -> bool:
     return comparable(quote) in comparable(passage.text)
 
 
-def unsupported_figures(answer_text: str, passage: Passage) -> list[str]:
-    """Figures the answer states that its source does not contain."""
-    available = {_value(f) for f in figures_in(passage.text)}
+def unsupported_figures(answer_text: str, passage: Passage, question: str = "") -> list[str]:
+    """Figures the answer states that its source does not contain.
+
+    A year the question itself named is not one of them. Asked "what were
+    total assets at the end of fiscal 2025?", a model answers "total
+    assets at the end of fiscal 2025 were $359,241 million" and cites the
+    balance sheet row, "Total assets  359,241  364,980" — which holds the
+    amount and, being a row of figures, no year at all.
+
+    The first version of this rejected that answer. It was correct, its
+    figure was exactly right, its citation was real, and it was thrown
+    away because it repeated the date it had been asked about. The year
+    was not a claim the answer was making; it was the question, restated.
+
+    Narrow on purpose. Only a four-digit year, and only one the question
+    contains, is let past. Every amount, every percentage and every year
+    the answer introduces by itself is still checked, so a model cannot
+    smuggle a figure through by writing it as though it were a date.
+    """
+    available = {figure_value(f) for f in figures_in(passage.text)}
     available.discard(None)
+    asked = {f for f in figures_in(question) if YEAR.match(f)}
 
     missing: list[str] = []
     for figure in figures_in(answer_text):
-        value = _value(figure)
+        if figure in asked:
+            continue
+        value = figure_value(figure)
         if value is None or value in available:
             continue
         if figure not in missing:
@@ -115,7 +143,7 @@ def unsupported_figures(answer_text: str, passage: Passage) -> list[str]:
     return missing
 
 
-def verify(answer: Answer, offered: list[Passage]) -> Verdict:
+def verify(answer: Answer, offered: list[Passage], question: str = "") -> Verdict:
     """Decide whether an answer may be shown to anyone.
 
     Checked against every passage the model was OFFERED, not only the one
@@ -155,7 +183,7 @@ def verify(answer: Answer, offered: list[Passage]) -> Verdict:
         )
 
     reasons: list[str] = []
-    missing = unsupported_figures(answer.text, source)
+    missing = unsupported_figures(answer.text, source, question)
     if missing:
         reasons.append(
             f"the citation does not contain {', '.join(missing)}"
@@ -173,14 +201,14 @@ def verify(answer: Answer, offered: list[Passage]) -> Verdict:
     )
 
 
-def checked(answer: Answer, offered: list[Passage]) -> tuple[Answer, Verdict]:
+def checked(answer: Answer, offered: list[Passage], question: str = "") -> tuple[Answer, Verdict]:
     """An answer with its verdict recorded, and its citation corrected.
 
     Returned together rather than folded into one object so a caller has
     to look at the verdict. An answer that quietly carried a boolean would
     invite being rendered without anybody reading it.
     """
-    verdict = verify(answer, offered)
+    verdict = verify(answer, offered, question)
     answer.verified = verdict.verified
     # Point the answer at the passage that really holds its quote, so what
     # a reader is shown is where the sentence actually is.

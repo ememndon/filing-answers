@@ -198,3 +198,67 @@ class TestFigureScanning:
 
     def test_finds_nothing_in_prose_with_no_numbers(self) -> None:
         assert figures_in("The Company operates in several geographic segments.") == []
+
+
+class TestAYearTheQuestionAlreadyNamed:
+    """The false rejection that cost a correct answer.
+
+    Asked "what were total assets at the end of fiscal 2025?", the model
+    answered "total assets at the end of fiscal 2025 were $359,241
+    million" and cited the balance sheet row, which holds the amount and,
+    being a row of figures, no year at all. The answer was right, its
+    figure was exact, its citation was real, and it was thrown away for
+    repeating the date it had been asked about.
+    """
+
+    def test_a_year_from_the_question_is_not_a_claim(self) -> None:
+        row = Passage(text="Total assets  359,241  364,980", section="Item 8", index=1)
+        assert (
+            unsupported_figures(
+                "Total assets at the end of fiscal 2025 were 359,241 million.",
+                row,
+                "What were total assets at the end of fiscal 2025?",
+            )
+            == []
+        )
+
+    def test_a_year_the_question_never_mentioned_still_is(self) -> None:
+        # a model that dates a figure by itself is making a claim about
+        # which year it belongs to, and that has to be supported
+        row = Passage(text="Total assets  359,241  364,980", section="Item 8", index=1)
+        assert unsupported_figures("Total assets in 1998 were 359,241 million.", row, "") == [
+            "1998"
+        ]
+
+    def test_an_amount_is_never_let_through_by_this(self) -> None:
+        # the rule is for years only, so a question mentioning a number
+        # cannot be used to smuggle that number into an answer
+        row = Passage(text="Total assets  359,241  364,980", section="Item 8", index=1)
+        assert unsupported_figures(
+            "Total assets were 500,000 million.",
+            row,
+            "Were total assets 500,000 million?",
+        ) == ["500,000"]
+
+    def test_the_whole_verdict_passes_now(self) -> None:
+        row = Passage(text="Total assets  359,241  364,980", section="Item 8", index=1)
+        verdict = verify(
+            answer(
+                "Total assets at the end of fiscal 2025 were 359,241 million.",
+                "Total assets  359,241  364,980",
+                index=1,
+            ),
+            [row],
+            "What were total assets at the end of fiscal 2025?",
+        )
+        assert verdict.verified
+
+
+class TestFiguresAreReadCleanly:
+    def test_a_sentence_comma_is_not_part_of_the_year(self) -> None:
+        # "the citation does not contain 2025,," is a puzzle, not an
+        # explanation
+        assert figures_in("As of December 31, 2025, sales rose 6%.") == ["31", "2025", "6"]
+
+    def test_a_thousands_comma_still_is(self) -> None:
+        assert figures_in("Revenue of 391,035 million") == ["391,035"]

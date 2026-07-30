@@ -49,6 +49,18 @@ class Settings(BaseSettings):
 
     request_timeout_seconds: float = Field(default=30.0, gt=0)
 
+    threshold: float = Field(
+        default=85.0,
+        ge=0,
+        le=100,
+        description=(
+            "The percentage of the evaluation set that must be answered correctly "
+            "before a release is allowed. Configuration rather than a constant "
+            "because the number is a judgement about how much being wrong costs, "
+            "and that judgement belongs to whoever is deploying it."
+        ),
+    )
+
     @field_validator("anthropic_api_key")
     @classmethod
     def key_must_look_like_a_key(cls, value: str) -> str:

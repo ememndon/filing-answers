@@ -26,58 +26,64 @@ filing* — it can — but **how do you ship one and be able to sleep**.
 Ask a question about a filing:
 
 ```
-$ curl -s localhost:8000/ask -d '{
-    "ticker": "AAPL",
-    "question": "What was total net sales in fiscal 2024?"
-  }'
+$ make ask TICKER=BLK Q="What was total revenue in 2025?"
 ```
 
-```json
-{
-  "answer": "Total net sales were $391,035 million in fiscal 2024.",
-  "citation": "Total net sales increased 2% or $7,857 million during 2024
-               compared to 2023, to $391,035 million.",
-  "source": "AAPL 10-K FY2024, Item 7",
-  "verified": true
-}
+```
+  Total revenues in 2025 were $24,216 million.
+
+  "Total revenue  24,216  20,407"
+  — BLK 10-K FY2025, Item 7
 ```
 
-Every answer carries the sentence it came from. That is not a nicety — it
-is what makes the next part possible.
+Every answer carries the sentence it came from, and the item of the filing
+that sentence is in. That is not a nicety — it is what makes the next part
+possible.
 
 ## The part that matters
 
 Every number in the answer is checked against the passage it cited. If the
 model states a figure that does not appear in its own source, the answer is
-rejected before anyone sees it.
+withheld — not flagged, not shown with a warning. Withheld. An unsupported
+figure handed over with a caveat attached gets read; the caveat does not.
 
-That check also runs over a fixed set of questions with known answers, as a
-release gate:
+That check also runs over 48 questions with known answers, as a release
+gate:
 
 ```
 $ make evaluate
 
-  questions            48
-  answered correctly   44  (91.7%)
-  unsupported figures   0
-  threshold            85.0%
+  questions             48
+  answered correctly    46  (95.8%)
+  unsupported figures    0
+  threshold             85.0%
 
   PASS
 ```
 
-Drop the model's quality and the gate stops the release:
+Now make the system worse in an entirely reasonable way. Show the model two
+passages instead of eight: every prompt gets shorter, every request gets
+cheaper, and nothing breaks. It passes the linter, the type checker and all
+177 unit tests, because none of that is a bug.
 
 ```
-  answered correctly   29  (60.4%)
-  unsupported figures   6
-  threshold            85.0%
+$ make degraded
+
+  questions             48
+  answered correctly    30  (62.5%)
+  unsupported figures    2
+  threshold             85.0%
 
   FAIL — release blocked
 ```
 
-The same check runs in CI, so a change that quietly makes answers worse
-cannot merge. A model that is wrong is a normal Tuesday; a model that is
-wrong and ships is an incident.
+Sixteen right answers gone and two invented figures in front of a reader,
+from a change that looks like housekeeping. That is the failure this is
+built to catch, and the only thing standing between it and production is
+that command's exit code.
+
+The same check runs in CI. A model that is wrong is a normal Tuesday; a
+model that is wrong and ships is an incident.
 
 ## Running it
 

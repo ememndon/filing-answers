@@ -35,7 +35,19 @@ from .verify import Verdict, checked
 #: usually among them, few enough that it cannot quietly answer from the
 #: wrong part of a 300-page document — every extra passage is another
 #: place a plausible wrong number can be found.
-PASSAGES_PER_QUESTION = 5
+#:
+#: Eight because it was measured, not guessed. Across the forty-two
+#: answerable questions in the evaluation set, the passage holding the
+#: answer is in the top five for thirty-eight of them and in the top
+#: eight for forty-one. Twelve finds nothing that eight does not, so the
+#: extra context would be paid for and never used.
+#:
+#: The remaining one is not a ranking problem. Asked which firm audits
+#: BlackRock, the answer is a signature — "/s/ Deloitte & Touche LLP" —
+#: sitting in a passage that shares almost no words with the question,
+#: while the auditor's report itself matches every word of it and never
+#: names anybody. No value of this number reaches it.
+PASSAGES_PER_QUESTION = 8
 
 WITHHELD = "The answer could not be verified against the filing, so it has been withheld."
 
@@ -101,9 +113,20 @@ class AnswerService:
     against no model at all.
     """
 
-    def __init__(self, edgar: EdgarClient, call: ModelCall) -> None:
+    def __init__(
+        self,
+        edgar: EdgarClient,
+        call: ModelCall,
+        passages_per_question: int = PASSAGES_PER_QUESTION,
+    ) -> None:
         self._edgar = edgar
         self._call = call
+        # Adjustable so the gate can be run against a deliberately worse
+        # configuration and shown to block it. Turning this down is the
+        # cheapest way to make the whole system worse — fewer passages is
+        # a smaller prompt and a smaller bill — and it is exactly the kind
+        # of change that passes every unit test on the way in.
+        self._passages = passages_per_question
         self._indexes: dict[str, FilingIndex] = {}
 
     def index_for(self, ticker: str) -> FilingIndex:
@@ -127,13 +150,13 @@ class AnswerService:
         index = self.index_for(ticker)
         trace.filing = index.filing
 
-        scored = index.search(question)
+        scored = index.search(question, limit=self._passages)
         trace.considered = [s.passage for s in scored]
 
         raw = ask(question, scored, self._call)
         trace.raw = raw
 
-        answer, verdict = checked(raw, trace.considered)
+        answer, verdict = checked(raw, trace.considered, question)
         trace.verdict = verdict
         trace.seconds = round(time.monotonic() - started, 3)
 
