@@ -6,6 +6,9 @@ things up**.
 
 The interesting part is not the answering. It is everything around it.
 
+**Try it:** [filings.ememndon.com](https://filings.ememndon.com) ·
+**Why it is built this way:** [PRODUCTION.md](PRODUCTION.md)
+
 ---
 
 ## The problem
@@ -84,6 +87,18 @@ that command's exit code.
 
 The same check runs in CI. A model that is wrong is a normal Tuesday; a
 model that is wrong and ships is an incident.
+
+## Why any of this
+
+Most AI prototypes do not fail because the model was not good enough.
+They fail at the handover, on questions that have nothing to do with
+machine learning: how would we know if it started getting things wrong,
+what happens when it does, can an auditor trace a number back to its
+source, who says it may ship.
+
+[**PRODUCTION.md**](PRODUCTION.md) is those questions — eight of them —
+and what this repository does about each. Seven have code behind them.
+The eighth is named there rather than left out.
 
 ## Running it
 
